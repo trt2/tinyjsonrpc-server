@@ -1,9 +1,10 @@
 {
   "name": "@trt2/tinyjsonrpc-server",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Test.",
   "main": "src/TinyJsonRpcServer.js",
   "license": "MIT",
+  "repository": "github:trt2/tinyjsonrpc-server",
   "dependencies": {},
   "devDependencies": {
     "chai": "^4.1.2",
