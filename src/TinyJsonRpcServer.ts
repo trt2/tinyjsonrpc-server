@@ -1,16 +1,46 @@
-const JSONRPC_ERRORCODES = {
-    PARSE_ERROR: -32700,
-    INVALID_REQUEST: -32600,
-    METHOD_NOT_FOUND: -32601,
-    INVALID_PARAMS: -32602,
-    INTERNAL_ERROR: -32603
+
+export enum JSONRPC_ERRORCODES {
+    PARSE_ERROR = -32700,
+    INVALID_REQUEST = -32600,
+    METHOD_NOT_FOUND = -32601,
+    INVALID_PARAMS = -32602,
+    INTERNAL_ERROR = -32603,
 };
 
-function isNumeric(v) {
+export type JsonRpcId = string | number | null;
+export type JsonRpcParams = object;
+export type RequestContext = any;
+export type MethodCallback = (method: string, params?: JsonRpcParams, requestContext?: RequestContext) => any;
+
+export interface MethodMap {
+    [key: string]: (params: JsonRpcParams|undefined, requestContext?: RequestContext) => any;
+}
+
+export interface ErrorObject {
+    code: number;
+    message: string;
+    data?: any;
+};
+
+export interface JsonRpcRequest {
+    id?: JsonRpcId;
+    jsonrpc: string;
+    method: string;
+    params?: object;
+};
+
+export interface JsonRpcResponse {
+    jsonrpc: string;
+    result?: any;
+    error?: any;
+    id: JsonRpcId;
+}
+
+function isNumeric(v: any): boolean {
     return !isNaN(Number(v)) && isFinite(v);
 }
 
-function isString(v) {
+function isString(v: any): boolean {
     return (typeof v === 'string') || (v instanceof String);
 }
 
@@ -21,9 +51,8 @@ function isString(v) {
  * @param {*} message 
  * @param {*} data optional data object/value
  */
-function createErrorObject(code, message, data) {
-    const codeNum = Number(code);
-    let error = {
+export function createErrorObject(code: number, message?: string, data?: any): ErrorObject {
+    let error: ErrorObject = {
         code: isNumeric(code) ? code : JSONRPC_ERRORCODES.INTERNAL_ERROR,
         message: message ? message : 'Unspecified error'
     };
@@ -38,22 +67,26 @@ function createErrorObject(code, message, data) {
 /**
  * Exception that is thrown by methods respond with a JSON-RPC error.
  */
-class JsonRpcRequestException {
-    constructor(codeOrObject, message, data) {
-        if(codeOrObject === Object(codeOrObject)) {  
-            this.errorObj = codeOrObject;
+export class JsonRpcRequestException extends Error {
+    errorObj: ErrorObject;
+    name: string;
+    message: string;
+    stack?: string | undefined;
+
+    constructor(codeOrObject: ErrorObject | number, message?: string, data?: any) {
+        super(message);
+
+        if(isNumeric(codeOrObject)) {
+            this.errorObj = createErrorObject(codeOrObject as number, message, data);
         } else {
-            this.errorObj = createErrorObject(codeOrObject, message, data);
+            this.errorObj = codeOrObject as ErrorObject;
         }
         this.name = 'JsonRpcRequestError';
         this.message = 'JsonRpcRequestError: ' + JSON.stringify(this.errorObj);
-        this.stack = new Error().stack;
     }
 }
 
-JsonRpcRequestException.prototype = Object.create(Error.prototype);
-
-function createErrorResponse(id, code, message, data) {
+function createErrorResponse(id: JsonRpcId | undefined, code: number, message?: string, data?: any): JsonRpcResponse {
     return { jsonrpc: "2.0", error: createErrorObject(code, message, data), id: id === undefined ? null : id };
 }
 
@@ -61,11 +94,11 @@ function createErrorResponse(id, code, message, data) {
  * When JSON parsing is done outside the TinyJsonRpcServer, this method can be used
  * to create a parse error response.
  */
-function createParseErrorResponse(message="Unable to parse JSON", data) {
+export function createParseErrorResponse(message: string = "Unable to parse JSON", data?: any): JsonRpcResponse {
     return createErrorResponse(null, JSONRPC_ERRORCODES.PARSE_ERROR, message, data);
 }
 
-function createResultResponse(result, id) {
+function createResultResponse(result: any, id: JsonRpcId): JsonRpcResponse {
     return { jsonrpc: "2.0", result, id };
 }
 
@@ -73,7 +106,10 @@ function createResultResponse(result, id) {
  * Handle JSON-RPC requests and produce response
  * 
  */
-class TinyJsonRpcServer {
+export class TinyJsonRpcServer {
+    _methods: MethodMap;
+    _methodCallback: MethodCallback | undefined;
+
     constructor() {
         this._methods = {};
         this._methodCallback = undefined;
@@ -95,7 +131,7 @@ class TinyJsonRpcServer {
      * 
      * @param {*} methodObj 
      */
-    registerMethods(methodObj) {
+    registerMethods(methodObj: MethodMap): void {
         this._methods = { ...this._methods, ...methodObj };
     }
 
@@ -103,7 +139,7 @@ class TinyJsonRpcServer {
      * Returns the actual method object used by the server.
      * Values may be added and removed from this object.
      */
-    getRegisteredMethods() {
+    getRegisteredMethods(): MethodMap {
         return this._methods;
     }
 
@@ -125,14 +161,14 @@ class TinyJsonRpcServer {
      * 
      * @param {*} methodCallback 
      */
-    registerMethodCallback(methodCallback) {
+    registerMethodCallback(methodCallback: MethodCallback): void {
         this._methodCallback = methodCallback;
     }
 
     /**
      * Returns the registered method callback function
      */
-    getMethodCallback() {
+    getMethodCallback(): MethodCallback|undefined {
         return this._methodCallback;
     }
 
@@ -148,11 +184,11 @@ class TinyJsonRpcServer {
      * @param {*} request either string or JSON object
      * @param {*} requestContext optional context object passed to the handler methods
      */
-    handleJsonRpcRequest(request, requestContext={}) {
+    handleJsonRpcRequest(request: JsonRpcRequest | JsonRpcRequest[] | string, requestContext:RequestContext={}): Promise<(JsonRpcResponse|null)[] | JsonRpcResponse | null> {
         return Promise.resolve().then(() => {
-            if(typeof request === 'string' || request instanceof String) {
+            if(isString(request)) {
                 try {
-                    request = JSON.parse(request);
+                    request = JSON.parse(request as string);
                 } catch(e) {
                     return createParseErrorResponse();
                 }
@@ -166,7 +202,8 @@ class TinyJsonRpcServer {
                 return this._handleJsonRpcBatchRequest(request, requestContext);
             }
 
-            return this._handleJsonRpcRequest(request, requestContext);
+
+            return this._handleJsonRpcRequest(request as JsonRpcRequest, requestContext);
         }).catch((e) => {
             console.error(e);
             return createErrorResponse(null, JSONRPC_ERRORCODES.INTERNAL_ERROR, "An error occurred when processing request", e);
@@ -179,10 +216,10 @@ class TinyJsonRpcServer {
      * @param {*} request 
      * @param {*} requestContext 
      */
-    _handleJsonRpcRequest(request, requestContext) {
+    _handleJsonRpcRequest(request: JsonRpcRequest, requestContext: RequestContext): Promise<JsonRpcResponse|null> {
         // These will be initialized after we call _validateRequest
         let hasRequestId = false;
-        let requestId = null;
+        let requestId: JsonRpcId|undefined = null;
 
         return Promise.resolve()
             .then(() => {
@@ -192,7 +229,7 @@ class TinyJsonRpcServer {
                 }
 
                 hasRequestId = 'id' in request;
-                requestId = hasRequestId ? request.id : null;
+                requestId = hasRequestId ? request.id as JsonRpcId : null;
 
                 let result;
 
@@ -214,7 +251,7 @@ class TinyJsonRpcServer {
                 return Promise.resolve(result)
                     .then((result) => {
                         if(hasRequestId) {
-                            return createResultResponse(result, requestId);
+                            return createResultResponse(result, requestId as JsonRpcId);
                         }
                         
                         // Return null for notification request
@@ -243,7 +280,7 @@ class TinyJsonRpcServer {
      * @param {*} requests 
      * @param {*} requestContext 
      */
-    _handleJsonRpcBatchRequest(requests, requestContext={}) {
+    _handleJsonRpcBatchRequest(requests: JsonRpcRequest[], requestContext: RequestContext={}): Promise<(JsonRpcResponse|null)[] | JsonRpcResponse | null> {
         const promises = requests.map(request => this._handleJsonRpcRequest(request, requestContext));
         return Promise.all(promises)
             .then((responses) => {
@@ -270,7 +307,7 @@ class TinyJsonRpcServer {
      * 
      * @param {*} request 
      */
-    _validateRequest(request) {
+    _validateRequest(request: JsonRpcRequest) : JsonRpcResponse | null {
         let requestId = null;
 
         if(request !== Object(request)) {
@@ -304,11 +341,3 @@ class TinyJsonRpcServer {
         return null;
     }
 }
-
-module.exports = {
-    JSONRPC_ERRORCODES,
-    createParseErrorResponse,
-    createErrorObject,
-    JsonRpcRequestException,
-    TinyJsonRpcServer
-};

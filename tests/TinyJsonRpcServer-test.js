@@ -5,7 +5,7 @@ const {
     createParseErrorResponse,
     JsonRpcRequestException,
     TinyJsonRpcServer 
-} = require('../src/TinyJsonRpcServer'); 
+} = require('../lib/TinyJsonRpcServer'); 
 
 function serviceRegistrator({namespace=''} = {}) {
     let methods = {};
