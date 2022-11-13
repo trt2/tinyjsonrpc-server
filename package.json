@@ -1,14 +1,14 @@
 {
   "name": "@trt2/tinyjsonrpc-server",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "description": "Test.",
   "main": "lib/TinyJsonRpcServer.js",
   "license": "MIT",
   "repository": "github:trt2/tinyjsonrpc-server",
   "devDependencies": {
-    "@types/node": "^17.0.34",
+    "@types/node": "^18.11.9",
     "chai": "^4.1.2",
-    "mocha": "^5.0.0",
+    "mocha": "^10.1.0",
     "rimraf": "^3.0.2",
     "typescript": "^4.6.4"
   },
